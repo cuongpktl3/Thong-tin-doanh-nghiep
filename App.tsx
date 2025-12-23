@@ -1,9 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { BankRecord, ExtractedData, ManualData, DocType } from './types';
 import BankInput from './components/BankInput';
 import MemberDebtInput from './components/MemberDebtInput';
 import ExtractionField from './components/ExtractionField';
-import { Download, Check, FileText, Copy, Code, X, RefreshCw } from 'lucide-react';
+import { Download, Check, FileText, Copy, Code, X, RefreshCw, AlertTriangle, Edit3 } from 'lucide-react';
 
 // Factory functions to ensure deep copies/fresh state on reset
 const getInitialExtracted = (): ExtractedData => ({
@@ -13,10 +13,24 @@ const getInitialExtracted = (): ExtractedData => ({
   revenue2023: '',
   revenue2024: '',
   netProfitOrLoss2024: '',
+  // Quarters
   revenueQ1_2025: '',
   revenueQ2_2025: '',
   revenueQ3_2025: '',
   revenueQ4_2025: '',
+  // Months
+  revenueM1_2025: '',
+  revenueM2_2025: '',
+  revenueM3_2025: '',
+  revenueM4_2025: '',
+  revenueM5_2025: '',
+  revenueM6_2025: '',
+  revenueM7_2025: '',
+  revenueM8_2025: '',
+  revenueM9_2025: '',
+  revenueM10_2025: '',
+  revenueM11_2025: '',
+  revenueM12_2025: '',
 });
 
 const getInitialManual = (): ManualData => ({
@@ -28,6 +42,7 @@ const getInitialManual = (): ManualData => ({
   supermarket: '',
   supermarketName: '',
   profitLoss2024: '',
+  manualProfitLossAmount: '',
   corporateBadDebt: '',
   personalBadDebt: '',
   memberBadDebt: '',
@@ -111,16 +126,33 @@ const App: React.FC = () => {
       return total.toLocaleString('vi-VN', { maximumFractionDigits: 3 });
   };
 
-  // Calculate live totals
+  const totalCorporateDebtDisplay = calculateTotalDebt(manual.corporateBanks);
+  const totalPersonalDebtDisplay = calculateTotalPersonalDebt();
+
+  // Calculate live totals for VAT
+  // Quarters
   const vatQ1 = parseMoney(extracted.revenueQ1_2025);
   const vatQ2 = parseMoney(extracted.revenueQ2_2025);
   const vatQ3 = parseMoney(extracted.revenueQ3_2025);
   const vatQ4 = parseMoney(extracted.revenueQ4_2025);
-  const vatTotal = vatQ1 + vatQ2 + vatQ3 + vatQ4;
-  const vatTotalDisplay = vatTotal > 0 ? formatMoneyInput(vatTotal.toString()) + ' VNĐ' : '...';
+  // Months
+  const vatM1 = parseMoney(extracted.revenueM1_2025);
+  const vatM2 = parseMoney(extracted.revenueM2_2025);
+  const vatM3 = parseMoney(extracted.revenueM3_2025);
+  const vatM4 = parseMoney(extracted.revenueM4_2025);
+  const vatM5 = parseMoney(extracted.revenueM5_2025);
+  const vatM6 = parseMoney(extracted.revenueM6_2025);
+  const vatM7 = parseMoney(extracted.revenueM7_2025);
+  const vatM8 = parseMoney(extracted.revenueM8_2025);
+  const vatM9 = parseMoney(extracted.revenueM9_2025);
+  const vatM10 = parseMoney(extracted.revenueM10_2025);
+  const vatM11 = parseMoney(extracted.revenueM11_2025);
+  const vatM12 = parseMoney(extracted.revenueM12_2025);
 
-  const totalCorporateDebtDisplay = calculateTotalDebt(manual.corporateBanks);
-  const totalPersonalDebtDisplay = calculateTotalPersonalDebt();
+  const totalQuarters = vatQ1 + vatQ2 + vatQ3 + vatQ4;
+  const totalMonths = vatM1 + vatM2 + vatM3 + vatM4 + vatM5 + vatM6 + vatM7 + vatM8 + vatM9 + vatM10 + vatM11 + vatM12;
+  const vatTotal = totalQuarters + totalMonths;
+  const vatTotalDisplay = vatTotal > 0 ? formatMoneyInput(vatTotal.toString()) + ' VNĐ' : '...';
 
   // Result Actions
   const handleCopy = () => {
@@ -180,15 +212,46 @@ const App: React.FC = () => {
         return list.length > 0 ? list.join(', ') : 'Không';
     };
 
-    // Logic for Profit/Loss 2024
+    // Logic for Profit/Loss 2024 display in result
     let profitLossDisplay = '...';
+    // Use manual data if set (which is auto-filled by AI), otherwise fallback
+    const amountVal = manual.manualProfitLossAmount;
+    const formattedAmount = amountVal ? formatCurrency(amountVal) : '...';
+
     if (manual.profitLoss2024 === 'loi') {
-        profitLossDisplay = `Có lỗ (${extracted.netProfitOrLoss2024 ? formatCurrency(extracted.netProfitOrLoss2024) : '...'}`;
-        if(!extracted.netProfitOrLoss2024) profitLossDisplay += ")";
-        else profitLossDisplay += ")";
+        profitLossDisplay = `Có lỗ (${formattedAmount})`;
     } else if (manual.profitLoss2024 === 'loi_nhuan') {
-        profitLossDisplay = 'Có lợi nhuận';
+        profitLossDisplay = `Có lợi nhuận (${formattedAmount})`;
+    } else if (manual.profitLoss2024 === 'hoa_von') {
+        profitLossDisplay = 'Hòa vốn';
     }
+
+    // Helper to generate list items for VAT
+    const renderVatDetails = () => {
+        const quarterItems = [];
+        if (vatQ1 > 0) quarterItems.push(`Quý 1: ${formatCurrency(extracted.revenueQ1_2025)}`);
+        if (vatQ2 > 0) quarterItems.push(`Quý 2: ${formatCurrency(extracted.revenueQ2_2025)}`);
+        if (vatQ3 > 0) quarterItems.push(`Quý 3: ${formatCurrency(extracted.revenueQ3_2025)}`);
+        if (vatQ4 > 0) quarterItems.push(`Quý 4: ${formatCurrency(extracted.revenueQ4_2025)}`);
+
+        const monthItems = [];
+        for (let i = 1; i <= 12; i++) {
+            const key = `revenueM${i}_2025` as keyof ExtractedData;
+            const val = parseMoney(extracted[key]);
+            if (val > 0) {
+                monthItems.push(`Tháng ${i}: ${formatCurrency(extracted[key])}`);
+            }
+        }
+
+        if (quarterItems.length === 0 && monthItems.length === 0) return <li>...</li>;
+
+        return (
+            <>
+                {quarterItems.map((item, i) => <li key={`q-${i}`}>{item}</li>)}
+                {monthItems.map((item, i) => <li key={`m-${i}`}>{item}</li>)}
+            </>
+        );
+    };
 
     return (
       <div className="font-sans text-gray-800 leading-relaxed p-6 bg-white border rounded shadow-sm">
@@ -201,10 +264,7 @@ const App: React.FC = () => {
           <li>
             <strong>Doanh thu thuế 2025 (Tổng cộng: {vatTotalDisplay}):</strong>
             <ul className="ml-6 mt-1 space-y-1 list-disc text-sm text-gray-700">
-              <li>Quý 1: {formatCurrency(extracted.revenueQ1_2025)}</li>
-              <li>Quý 2: {formatCurrency(extracted.revenueQ2_2025)}</li>
-              <li>Quý 3: {formatCurrency(extracted.revenueQ3_2025)}</li>
-              <li>Quý 4: {formatCurrency(extracted.revenueQ4_2025)}</li>
+               {renderVatDetails()}
             </ul>
           </li>
           <li>
@@ -244,7 +304,7 @@ const App: React.FC = () => {
           <li><strong>Phần mềm sử dụng:</strong> {getSoftwareString()}</li>
           <li><strong>Xuất nhập khẩu:</strong> {manual.importExport === 'nhap_khau' ? 'Có nhập khẩu' : manual.importExport === 'xuat_khau' ? 'Có xuất khẩu' : manual.importExport === 'ca_hai' ? 'Cả hai' : 'Không'}</li>
           <li><strong>Cung cấp hàng siêu thị:</strong> {manual.supermarket === 'co' ? `Có (${manual.supermarketName})` : 'Không'}</li>
-          <li><strong>Báo thuế 2024 có lỗ không:</strong> {profitLossDisplay}</li>
+          <li><strong>Báo cáo thuế 2024:</strong> {profitLossDisplay}</li>
           <li><strong>Nợ xấu doanh nghiệp:</strong> {manual.corporateBadDebt === 'co' ? 'Có' : 'Không'}</li>
           <li><strong>Nợ xấu cá nhân:</strong> {manual.personalBadDebt === 'co' ? 'Có' : 'Không'}</li>
           <li><strong>Thành viên góp vốn nợ xấu:</strong> {manual.memberBadDebt === 'co_mot_nguoi' ? 'Có' : manual.memberBadDebt === 'khong' ? 'Không' : 'Không rõ'}</li>
@@ -283,16 +343,62 @@ const App: React.FC = () => {
                   Tải lên tài liệu để hệ thống AI (Gemini) tự động điền thông tin.
                 </p>
 
-                <ExtractionField
-                  label="1. Giấy Đăng Ký Kinh Doanh"
-                  subLabel="Hệ thống sẽ lấy MST và tra cứu Ngành nghề chính trên Masothue.com"
-                  docType={DocType.REGISTRATION}
-                  resultLabel="Kết quả"
-                  resultValue={extracted.companyName ? `${extracted.companyName} - ${extracted.businessLine}` : undefined}
-                  onExtract={(data) => setExtracted(prev => ({ ...prev, companyName: data.companyName, taxId: data.taxId, businessLine: data.businessLine }))}
-                />
+                <div>
+                  <ExtractionField
+                    label="1. Giấy Đăng Ký Kinh Doanh"
+                    subLabel="Hệ thống sẽ lấy MST và tra cứu Ngành nghề chính trên Masothue.com"
+                    docType={DocType.REGISTRATION}
+                    // Removed resultValue to use manual inputs below instead
+                    onExtract={(data) => setExtracted(prev => ({ ...prev, companyName: data.companyName, taxId: data.taxId, businessLine: data.businessLine }))}
+                  />
+                  
+                  {/* EDITABLE FIELDS FOR REGISTRATION DATA */}
+                  {(extracted.companyName || extracted.taxId) && (
+                    <div className="mt-3 p-4 bg-white border border-blue-200 rounded-lg shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-2 text-blue-700 font-semibold border-b pb-2 mb-2">
+                           <Edit3 size={18} />
+                           <span>Chỉnh sửa thông tin trích xuất</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                           <div className="md:col-span-2">
+                               <label className="block text-sm font-medium text-gray-700 mb-1">Tên Công Ty</label>
+                               <input
+                                 type="text"
+                                 className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+                                 value={extracted.companyName}
+                                 onChange={(e) => setExtracted(prev => ({ ...prev, companyName: e.target.value }))}
+                                 placeholder="Nhập tên công ty..."
+                               />
+                           </div>
+                           <div>
+                               <label className="block text-sm font-medium text-gray-700 mb-1">Mã Số Thuế</label>
+                                <input
+                                 type="text"
+                                 className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+                                 value={extracted.taxId}
+                                 onChange={(e) => setExtracted(prev => ({ ...prev, taxId: e.target.value }))}
+                                 placeholder="Nhập MST..."
+                               />
+                           </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Ngành nghề kinh doanh chính
+                                <span className="text-xs font-normal text-gray-500 ml-1">(Bạn có thể sửa lại cho ngắn gọn)</span>
+                            </label>
+                            <textarea
+                                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+                                rows={4}
+                                value={extracted.businessLine}
+                                onChange={(e) => setExtracted(prev => ({ ...prev, businessLine: e.target.value }))}
+                                placeholder="Nội dung ngành nghề..."
+                            />
+                        </div>
+                    </div>
+                  )}
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                   <ExtractionField
                     label="2. BCTC 2023"
                     docType={DocType.FINANCIAL_2023}
@@ -305,19 +411,58 @@ const App: React.FC = () => {
                     docType={DocType.FINANCIAL_2024}
                     resultLabel="Doanh thu 2024"
                     resultValue={extracted.revenue2024}
-                    onExtract={(data) => setExtracted(prev => ({ ...prev, revenue2024: data.revenue, netProfitOrLoss2024: data.netProfitOrLoss }))}
+                    onExtract={(data) => {
+                        setExtracted(prev => ({ ...prev, revenue2024: data.revenue, netProfitOrLoss2024: data.netProfitOrLoss }));
+                        // AUTO-FILL Part 9 Logic
+                        if (data.netProfitOrLoss) {
+                            const raw = data.netProfitOrLoss.toString();
+                            // Check if negative (enclosed in parens or starts with minus)
+                            const isLoss = raw.includes('(') || raw.includes('-');
+                            // Clean the string to get just the displayable amount (keep dots, remove () and -)
+                            const cleanAmount = raw.replace(/[()\-]/g, '').trim();
+
+                            setManual(prev => ({ 
+                                ...prev, 
+                                profitLoss2024: isLoss ? 'loi' : 'loi_nhuan',
+                                manualProfitLossAmount: cleanAmount
+                            }));
+                        }
+                    }}
                   />
                 </div>
 
                 <div className="mt-4">
-                  <label className="block text-gray-700 font-bold mb-2">
+                  <label className="block text-gray-700 font-bold mb-3 border-b pb-2">
                     3. Tờ Khai Thuế GTGT 2025 (Tổng cộng: {vatTotalDisplay})
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <ExtractionField label="Quý 1" docType={DocType.VAT_Q1} resultValue={extracted.revenueQ1_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ1_2025: d.revenue}))} />
-                    <ExtractionField label="Quý 2" docType={DocType.VAT_Q2} resultValue={extracted.revenueQ2_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ2_2025: d.revenue}))} />
-                    <ExtractionField label="Quý 3" docType={DocType.VAT_Q3} resultValue={extracted.revenueQ3_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ3_2025: d.revenue}))} />
-                    <ExtractionField label="Quý 4" docType={DocType.VAT_Q4} resultValue={extracted.revenueQ4_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ4_2025: d.revenue}))} />
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Column 1: Monthly */}
+                    <div className="bg-white p-4 rounded border border-gray-200">
+                        <h3 className="font-semibold text-blue-700 mb-4 text-center uppercase text-sm tracking-wide">Kê Khai Theo Tháng</h3>
+                        <div className="grid grid-cols-1 gap-2">
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                                <ExtractionField 
+                                    key={`m${month}`}
+                                    label={`Tháng ${month}`} 
+                                    docType={DocType[`VAT_M${month}` as keyof typeof DocType]} 
+                                    resultValue={extracted[`revenueM${month}_2025` as keyof ExtractedData]} 
+                                    onExtract={(d) => setExtracted(p => ({...p, [`revenueM${month}_2025`]: d.revenue}))} 
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Column 2: Quarterly */}
+                    <div className="bg-white p-4 rounded border border-gray-200 h-fit">
+                        <h3 className="font-semibold text-green-700 mb-4 text-center uppercase text-sm tracking-wide">Kê Khai Theo Quý</h3>
+                         <div className="space-y-3">
+                            <ExtractionField label="Quý 1" docType={DocType.VAT_Q1} resultValue={extracted.revenueQ1_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ1_2025: d.revenue}))} />
+                            <ExtractionField label="Quý 2" docType={DocType.VAT_Q2} resultValue={extracted.revenueQ2_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ2_2025: d.revenue}))} />
+                            <ExtractionField label="Quý 3" docType={DocType.VAT_Q3} resultValue={extracted.revenueQ3_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ3_2025: d.revenue}))} />
+                            <ExtractionField label="Quý 4" docType={DocType.VAT_Q4} resultValue={extracted.revenueQ4_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ4_2025: d.revenue}))} />
+                         </div>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -415,15 +560,44 @@ const App: React.FC = () => {
 
                 <div className="mb-6">
                     <label className="block text-gray-700 font-semibold mb-2">9. Báo cáo thuế 2024 có lỗ không?</label>
-                    <select
-                      className="w-full p-2 border border-gray-300 rounded"
-                      value={manual.profitLoss2024}
-                      onChange={(e) => setManField('profitLoss2024', e.target.value)}
-                    >
-                      <option value="">-- Chọn --</option>
-                      <option value="loi">Có lỗ</option>
-                      <option value="loi_nhuan">Có lợi nhuận</option>
-                    </select>
+                    {/* Auto-filled notification */}
+                    {extracted.netProfitOrLoss2024 && (
+                        <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800 flex items-center gap-2">
+                             <AlertTriangle size={16} />
+                             <span>
+                                 Đã trích xuất từ BCTC: <strong>{extracted.netProfitOrLoss2024}</strong>
+                                 {' '}&rarr; Hệ thống tự động chọn: 
+                                 <strong>
+                                     {manual.profitLoss2024 === 'loi' ? ' Có lỗ' : manual.profitLoss2024 === 'loi_nhuan' ? ' Có lợi nhuận' : ' Hòa vốn'}
+                                 </strong>
+                             </span>
+                        </div>
+                    )}
+                    
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <select
+                          className={`w-full sm:w-1/3 p-2 border rounded ${extracted.netProfitOrLoss2024 ? 'bg-gray-100 font-medium' : 'border-gray-300'}`}
+                          value={manual.profitLoss2024}
+                          onChange={(e) => setManField('profitLoss2024', e.target.value)}
+                        >
+                          <option value="">-- Chọn --</option>
+                          <option value="loi">Có lỗ</option>
+                          <option value="loi_nhuan">Có lợi nhuận</option>
+                          <option value="hoa_von">Hòa vốn</option>
+                        </select>
+                        {(manual.profitLoss2024 === 'loi' || manual.profitLoss2024 === 'loi_nhuan') && (
+                             <div className="flex-1 relative">
+                                <input
+                                    type="text"
+                                    className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none pr-10"
+                                    placeholder="Nhập số tiền (VNĐ)..."
+                                    value={manual.manualProfitLossAmount}
+                                    onChange={(e) => setManField('manualProfitLossAmount', e.target.value)}
+                                />
+                                <span className="absolute right-3 top-2 text-gray-500 text-sm">VNĐ</span>
+                             </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="mb-6 space-y-3">

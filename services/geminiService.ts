@@ -2,21 +2,15 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { DocType } from "../types";
 
 // Initialize AI client using process.env.API_KEY directly as per guidelines.
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// CẤU HÌNH DANH SÁCH MODEL
-// Sử dụng Gemini 2.0 Flash làm chủ đạo vì tốc độ và quota tốt nhất.
-const MODEL_PRIORITY = [
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite-preview-02-05',
-  'gemini-2.0-pro-exp-02-05' // Backup cuối cùng nếu Flash quá tải
-];
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Data = reader.result as string;
+      // Ensure we have data
       if (!base64Data) {
         reject(new Error("File reading failed: result is empty"));
         return;
@@ -37,9 +31,6 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
   });
 };
 
-// Hàm delay đơn giản
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 export const processDocument = async (file: File, docType: DocType): Promise<any> => {
   if (!process.env.API_KEY) {
     throw new Error("API_KEY chưa được cấu hình. Vui lòng kiểm tra Settings trên Vercel (API_KEY) và Redeploy.");
@@ -51,9 +42,9 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
     let responseSchema = {};
     let tools: any[] = [];
 
-    // Define prompt and schema based on DocType
     switch (docType) {
       case DocType.REGISTRATION:
+        // Updated prompt to target the specific "Ngành nghề chính" label directly as requested
         prompt = `1. Extract the 'Tax ID' (Mã số thuế) and 'Company Name' (Tên công ty) from the image.
                   2. Use the google_search tool to search for the Tax ID on "masothue.com".
                   3. On the masothue.com page, locate the specific row or field labeled "Ngành nghề chính" (Main Business Line).
@@ -61,7 +52,9 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
                      - Do not look for a table of multiple industries. Look for the specific field explicitly labeled "Ngành nghề chính".
                      - Copy the content exactly, including the "Chi tiết:" (Detail) part if it exists (e.g., "Bán buôn... Chi tiết: ...").
                   5. Return the Company Name, Tax ID, and this full Business Line string.`;
+        
         tools = [{ googleSearch: {} }];
+
         responseSchema = {
           type: Type.OBJECT,
           properties: {
@@ -93,10 +86,24 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
           },
         };
         break;
+      // QUARTERLY VAT
       case DocType.VAT_Q1:
       case DocType.VAT_Q2:
       case DocType.VAT_Q3:
       case DocType.VAT_Q4:
+      // MONTHLY VAT
+      case DocType.VAT_M1:
+      case DocType.VAT_M2:
+      case DocType.VAT_M3:
+      case DocType.VAT_M4:
+      case DocType.VAT_M5:
+      case DocType.VAT_M6:
+      case DocType.VAT_M7:
+      case DocType.VAT_M8:
+      case DocType.VAT_M9:
+      case DocType.VAT_M10:
+      case DocType.VAT_M11:
+      case DocType.VAT_M12:
         prompt = "Extract the value from target [34] - Total Revenue (Tổng doanh thu) from this VAT declaration.";
         responseSchema = {
           type: Type.OBJECT,
@@ -107,71 +114,25 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
         break;
     }
 
-    let lastError: any = null;
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [filePart, { text: prompt }],
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: responseSchema,
+        tools: tools,
+      },
+    });
 
-    // Duyệt qua từng Model trong danh sách ưu tiên
-    for (const modelName of MODEL_PRIORITY) {
-      // Với mỗi Model, thử tối đa 3 lần (Retry) nếu gặp lỗi 429
-      const MAX_RETRIES = 3;
-      
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          console.log(`[Gemini Service] Model: ${modelName} - Attempt: ${attempt}`);
-          
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: {
-              parts: [filePart, { text: prompt }],
-            },
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: responseSchema,
-              tools: tools,
-            },
-          });
-
-          if (response.text) {
-             console.log(`[Gemini Service] Success with ${modelName}`);
-             return JSON.parse(response.text);
-          } else {
-             throw new Error("Empty response text");
-          }
-
-        } catch (error: any) {
-          const msg = error?.message || "";
-          console.warn(`[Gemini Service] Error with ${modelName} (Attempt ${attempt}):`, msg);
-          lastError = error;
-
-          // Kiểm tra nếu là lỗi Quota (429) hoặc Server quá tải (503, 500)
-          const isQuotaError = msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota");
-          const isServerError = msg.includes("503") || msg.includes("500") || msg.includes("overloaded");
-
-          if (isQuotaError || isServerError) {
-            if (attempt < MAX_RETRIES) {
-              // Nếu chưa hết lượt thử, chờ một chút rồi thử lại chính Model này.
-              // Thời gian chờ tăng dần: Lần 1 chờ 4s, Lần 2 chờ 8s...
-              const waitTime = attempt * 4000; 
-              console.log(`[Gemini Service] Waiting ${waitTime}ms before retry...`);
-              await delay(waitTime);
-              continue; // Quay lại vòng lặp attempt
-            }
-            // Nếu đã hết lượt thử của Model này, break để chuyển sang Model tiếp theo trong danh sách ưu tiên
-          }
-          
-          // Nếu lỗi khác (không phải do quota), chuyển ngay sang model tiếp theo
-          break; 
-        }
-      }
-      
-      // Chờ nhẹ trước khi chuyển sang Model dự phòng tiếp theo
-      await delay(1000);
+    if (!response.text) {
+        throw new Error("Gemini returned empty response");
     }
 
-    console.error("All models and retries exhausted.");
-    throw lastError || new Error("Hệ thống đang quá tải. Vui lòng thử lại sau 1 phút.");
-
+    return JSON.parse(response.text);
   } catch (error) {
-    console.error("Gemini processing fatal error:", error);
+    console.error("Gemini extraction error:", error);
     throw error;
   }
 };
