@@ -431,38 +431,61 @@ const App: React.FC = () => {
                   />
                 </div>
 
-                <div className="mt-4">
-                  <label className="block text-gray-700 font-bold mb-3 border-b pb-2">
+                <div className="mt-6">
+                  <label className="block text-gray-700 font-bold mb-4 border-b pb-2 text-lg">
                     3. Tờ Khai Thuế GTGT 2025 (Tổng cộng: {vatTotalDisplay})
                   </label>
                   
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Column 1: Monthly */}
-                    <div className="bg-white p-4 rounded border border-gray-200">
-                        <h3 className="font-semibold text-blue-700 mb-4 text-center uppercase text-sm tracking-wide">Kê Khai Theo Tháng</h3>
-                        <div className="grid grid-cols-1 gap-2">
-                            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                                <ExtractionField 
-                                    key={`m${month}`}
-                                    label={`Tháng ${month}`} 
-                                    docType={DocType[`VAT_M${month}` as keyof typeof DocType]} 
-                                    resultValue={extracted[`revenueM${month}_2025` as keyof ExtractedData]} 
-                                    onExtract={(d) => setExtracted(p => ({...p, [`revenueM${month}_2025`]: d.revenue}))} 
-                                />
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Column 2: Quarterly */}
-                    <div className="bg-white p-4 rounded border border-gray-200 h-fit">
-                        <h3 className="font-semibold text-green-700 mb-4 text-center uppercase text-sm tracking-wide">Kê Khai Theo Quý</h3>
-                         <div className="space-y-3">
+                  {/* QUARTERLY SECTION - ON TOP */}
+                  <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm mb-6">
+                      <h3 className="font-semibold text-green-700 mb-4 uppercase text-sm tracking-wide border-b border-green-100 pb-2">
+                          A. Kê Khai Theo Quý
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                         {/* Column 1: Q1 & Q3 */}
+                         <div className="space-y-4">
                             <ExtractionField label="Quý 1" docType={DocType.VAT_Q1} resultValue={extracted.revenueQ1_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ1_2025: d.revenue}))} />
-                            <ExtractionField label="Quý 2" docType={DocType.VAT_Q2} resultValue={extracted.revenueQ2_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ2_2025: d.revenue}))} />
                             <ExtractionField label="Quý 3" docType={DocType.VAT_Q3} resultValue={extracted.revenueQ3_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ3_2025: d.revenue}))} />
+                         </div>
+                         {/* Column 2: Q2 & Q4 */}
+                         <div className="space-y-4">
+                            <ExtractionField label="Quý 2" docType={DocType.VAT_Q2} resultValue={extracted.revenueQ2_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ2_2025: d.revenue}))} />
                             <ExtractionField label="Quý 4" docType={DocType.VAT_Q4} resultValue={extracted.revenueQ4_2025} onExtract={(d) => setExtracted(p => ({...p, revenueQ4_2025: d.revenue}))} />
                          </div>
-                    </div>
+                      </div>
+                  </div>
+
+                  {/* MONTHLY SECTION - BELOW */}
+                  <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                      <h3 className="font-semibold text-blue-700 mb-4 uppercase text-sm tracking-wide border-b border-blue-100 pb-2">
+                          B. Kê Khai Theo Tháng
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {/* Column 1: Months 1-6 */}
+                          <div className="space-y-3">
+                              {Array.from({ length: 6 }, (_, i) => i + 1).map((month) => (
+                                  <ExtractionField 
+                                      key={`m${month}`}
+                                      label={`Tháng ${month}`} 
+                                      docType={DocType[`VAT_M${month}` as keyof typeof DocType]} 
+                                      resultValue={extracted[`revenueM${month}_2025` as keyof ExtractedData]} 
+                                      onExtract={(d) => setExtracted(p => ({...p, [`revenueM${month}_2025`]: d.revenue}))} 
+                                  />
+                              ))}
+                          </div>
+                          {/* Column 2: Months 7-12 */}
+                          <div className="space-y-3">
+                              {Array.from({ length: 6 }, (_, i) => i + 7).map((month) => (
+                                  <ExtractionField 
+                                      key={`m${month}`}
+                                      label={`Tháng ${month}`} 
+                                      docType={DocType[`VAT_M${month}` as keyof typeof DocType]} 
+                                      resultValue={extracted[`revenueM${month}_2025` as keyof ExtractedData]} 
+                                      onExtract={(d) => setExtracted(p => ({...p, [`revenueM${month}_2025`]: d.revenue}))} 
+                                  />
+                              ))}
+                          </div>
+                      </div>
                   </div>
                 </div>
               </section>
