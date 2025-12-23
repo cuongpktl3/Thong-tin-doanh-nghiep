@@ -1,17 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DocType } from "../types";
 
-// Sử dụng optional chaining (?.) để truy cập an toàn.
-// Nếu import.meta.env bị undefined (do lỗi build hoặc môi trường), ứng dụng sẽ không bị crash.
-const apiKey = import.meta.env?.VITE_API_KEY;
-
-if (!apiKey) {
-  console.error("CRITICAL ERROR: VITE_API_KEY is missing. Please check Vercel Environment Variables.");
-}
-
-// Khởi tạo AI client. Nếu thiếu key, dùng string dummy để tránh lỗi khởi tạo, 
-// nhưng các gọi hàm sau đó sẽ thất bại và được catch ở dưới.
-const ai = new GoogleGenAI({ apiKey: apiKey || "MISSING_KEY" });
+// Initialize AI client using process.env.API_KEY directly as per guidelines.
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
@@ -40,8 +32,8 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
 };
 
 export const processDocument = async (file: File, docType: DocType): Promise<any> => {
-  if (!apiKey) {
-    throw new Error("VITE_API_KEY chưa được cấu hình. Vui lòng kiểm tra Settings trên Vercel và Redeploy.");
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY chưa được cấu hình. Vui lòng kiểm tra Settings trên Vercel (API_KEY) và Redeploy.");
   }
 
   try {
