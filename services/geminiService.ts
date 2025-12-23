@@ -2,15 +2,14 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { DocType } from "../types";
 
 // Initialize AI client using process.env.API_KEY directly as per guidelines.
-// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// CẤU HÌNH DANH SÁCH MODEL (CHỈ DÙNG 2.0 FLASH)
-// Gemini 2.0 Flash là bản ổn định, tốc độ nhanh và giới hạn Free Tier cao nhất (15 RPM)
-// Loại bỏ hoàn toàn Gemini 3 Pro/Flash Preview để tránh lỗi 429 Resource Exhausted.
+// CẤU HÌNH DANH SÁCH MODEL
+// Sử dụng Gemini 2.0 Flash làm chủ đạo vì tốc độ và quota tốt nhất.
 const MODEL_PRIORITY = [
-  'gemini-2.0-flash', 
-  'gemini-2.0-flash-lite-preview-02-05' // Backup siêu nhẹ
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite-preview-02-05',
+  'gemini-2.0-pro-exp-02-05' // Backup cuối cùng nếu Flash quá tải
 ];
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
@@ -18,7 +17,6 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Data = reader.result as string;
-      // Ensure we have data
       if (!base64Data) {
         reject(new Error("File reading failed: result is empty"));
         return;
@@ -38,6 +36,9 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
     reader.readAsDataURL(file);
   });
 };
+
+// Hàm delay đơn giản
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const processDocument = async (file: File, docType: DocType): Promise<any> => {
   if (!process.env.API_KEY) {
@@ -60,10 +61,7 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
                      - Do not look for a table of multiple industries. Look for the specific field explicitly labeled "Ngành nghề chính".
                      - Copy the content exactly, including the "Chi tiết:" (Detail) part if it exists (e.g., "Bán buôn... Chi tiết: ...").
                   5. Return the Company Name, Tax ID, and this full Business Line string.`;
-        
-        // Gemini 2.0 Flash supports search grounding usually, but if it fails, it falls back to text extraction.
         tools = [{ googleSearch: {} }];
-
         responseSchema = {
           type: Type.OBJECT,
           properties: {
@@ -109,48 +107,68 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
         break;
     }
 
-    // Try models in priority order
     let lastError: any = null;
-    
+
+    // Duyệt qua từng Model trong danh sách ưu tiên
     for (const modelName of MODEL_PRIORITY) {
-      try {
-        console.log(`[Gemini Service] Attempting with model: ${modelName}`);
-        
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: {
-            parts: [filePart, { text: prompt }],
-          },
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: responseSchema,
-            tools: tools,
-          },
-        });
+      // Với mỗi Model, thử tối đa 3 lần (Retry) nếu gặp lỗi 429
+      const MAX_RETRIES = 3;
+      
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          console.log(`[Gemini Service] Model: ${modelName} - Attempt: ${attempt}`);
+          
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: {
+              parts: [filePart, { text: prompt }],
+            },
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: responseSchema,
+              tools: tools,
+            },
+          });
 
-        if (response.text) {
-           console.log(`[Gemini Service] Success with ${modelName}`);
-           return JSON.parse(response.text);
-        } else {
-           // If response is empty, consider it a failure for this model and try next
-           throw new Error("Empty response text");
+          if (response.text) {
+             console.log(`[Gemini Service] Success with ${modelName}`);
+             return JSON.parse(response.text);
+          } else {
+             throw new Error("Empty response text");
+          }
+
+        } catch (error: any) {
+          const msg = error?.message || "";
+          console.warn(`[Gemini Service] Error with ${modelName} (Attempt ${attempt}):`, msg);
+          lastError = error;
+
+          // Kiểm tra nếu là lỗi Quota (429) hoặc Server quá tải (503, 500)
+          const isQuotaError = msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota");
+          const isServerError = msg.includes("503") || msg.includes("500") || msg.includes("overloaded");
+
+          if (isQuotaError || isServerError) {
+            if (attempt < MAX_RETRIES) {
+              // Nếu chưa hết lượt thử, chờ một chút rồi thử lại chính Model này.
+              // Thời gian chờ tăng dần: Lần 1 chờ 4s, Lần 2 chờ 8s...
+              const waitTime = attempt * 4000; 
+              console.log(`[Gemini Service] Waiting ${waitTime}ms before retry...`);
+              await delay(waitTime);
+              continue; // Quay lại vòng lặp attempt
+            }
+            // Nếu đã hết lượt thử của Model này, break để chuyển sang Model tiếp theo trong danh sách ưu tiên
+          }
+          
+          // Nếu lỗi khác (không phải do quota), chuyển ngay sang model tiếp theo
+          break; 
         }
-
-      } catch (error: any) {
-        console.warn(`[Gemini Service] Failed with ${modelName}:`, error.message);
-        lastError = error;
-        
-        // Với Gemini 2.0 Flash, lỗi thường ít gặp hơn.
-        // Giảm thời gian chờ xuống 1s để UX nhanh hơn.
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        continue;
       }
+      
+      // Chờ nhẹ trước khi chuyển sang Model dự phòng tiếp theo
+      await delay(1000);
     }
 
-    // If loop finishes without returning, all models failed
-    console.error("All models exhausted.");
-    throw lastError || new Error("All AI models failed to process the document.");
+    console.error("All models and retries exhausted.");
+    throw lastError || new Error("Hệ thống đang quá tải. Vui lòng thử lại sau 1 phút.");
 
   } catch (error) {
     console.error("Gemini processing fatal error:", error);
