@@ -1,0 +1,5 @@
+{
+  "name": "Thong tin doanh nghiep",
+  "description": "Ứng dụng thu thập và trích xuất thông tin doanh nghiệp tự động từ tài liệu và nhập liệu thủ công.",
+  "requestFramePermissions": []
+}
