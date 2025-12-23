@@ -146,10 +146,10 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
         console.warn(`[Gemini Service] Failed with ${modelName}:`, error.message);
         lastError = error;
         
-        // Add a small delay (1 second) before trying the next model.
+        // Add a small delay (1.5 second) before trying the next model.
         // This is CRITICAL for 429 errors. If we hit the rate limit, 
         // hammering the API instantly with the next request will just trigger another 429 globally.
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
         continue;
       }

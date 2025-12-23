@@ -27,13 +27,16 @@ const ExtractionField: React.FC<ExtractionFieldProps> = ({
     const msg = err?.message || JSON.stringify(err);
     
     if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
-      return "Hệ thống đang quá tải (Hết lượt miễn phí). Vui lòng đợi 30 giây rồi thử lại.";
+      return "Hệ thống đang bận (Hết lượt miễn phí trong phút này). Vui lòng đợi 30s rồi thử lại.";
     }
     if (msg.includes("503") || msg.includes("500") || msg.includes("overloaded")) {
       return "Máy chủ Google AI đang bận. Đang thử lại...";
     }
     if (msg.includes("API_KEY")) {
       return "Lỗi cấu hình API Key. Vui lòng kiểm tra cài đặt.";
+    }
+    if (msg.includes("Candidate was stopped")) {
+       return "AI từ chối xử lý tài liệu này (An toàn/Bản quyền). Hãy thử chụp lại ảnh rõ hơn.";
     }
     
     return "Không thể trích xuất dữ liệu. Vui lòng thử lại hoặc nhập tay.";
