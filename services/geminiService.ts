@@ -5,18 +5,20 @@ import { DocType } from "../types";
 // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// CẤU HÌNH MODEL:
-// - Development (AI Studio/Local): dùng 'gemini-3-flash-preview' để test tính năng mới nhất.
-// - Production (Vercel): dùng 'gemini-2.0-flash' (hoặc 'gemini-1.5-pro' tùy nhu cầu) để ổn định hơn.
-// import.meta.env.PROD trả về true khi app đã được build (lên Vercel).
-// Safely access import.meta.env to prevent runtime errors if undefined
-const isProd = import.meta.env && import.meta.env.PROD;
-
-const MODEL_NAME = isProd
-  ? 'gemini-2.0-flash' 
-  : 'gemini-3-flash-preview';
-
-console.log(`[Gemini Service] Running in ${isProd ? 'PRODUCTION' : 'DEVELOPMENT'} mode. Using model: ${MODEL_NAME}`);
+// CẤU HÌNH DANH SÁCH MODEL DỰ PHÒNG (FALLBACK)
+// Thứ tự ưu tiên từ cao xuống thấp theo yêu cầu:
+// 1. Gemini 3 Pro Preview
+// 2. Gemini 3 Flash Preview
+// 3. Gemini 2.5 Pro Preview (Sử dụng 2.0 Pro Exp làm tương đương hiện tại)
+// 4. Gemini 2.5 Flash (Sử dụng 2.0 Flash làm tương đương hiện tại)
+// 5. Gemini 2.5 Flash Lite (Sử dụng 2.0 Flash Lite làm tương đương hiện tại)
+const MODEL_PRIORITY = [
+  'gemini-3-pro-preview',
+  'gemini-3-flash-preview',
+  'gemini-2.0-pro-exp-02-05', 
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite-preview-02-05'
+];
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
@@ -55,9 +57,9 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
     let responseSchema = {};
     let tools: any[] = [];
 
+    // Define prompt and schema based on DocType
     switch (docType) {
       case DocType.REGISTRATION:
-        // Updated prompt to target the specific "Ngành nghề chính" label directly as requested
         prompt = `1. Extract the 'Tax ID' (Mã số thuế) and 'Company Name' (Tên công ty) from the image.
                   2. Use the google_search tool to search for the Tax ID on "masothue.com".
                   3. On the masothue.com page, locate the specific row or field labeled "Ngành nghề chính" (Main Business Line).
@@ -113,25 +115,46 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
         break;
     }
 
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: {
-        parts: [filePart, { text: prompt }],
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-        tools: tools,
-      },
-    });
+    // Try models in priority order
+    let lastError: any = null;
+    
+    for (const modelName of MODEL_PRIORITY) {
+      try {
+        console.log(`[Gemini Service] Attempting with model: ${modelName}`);
+        
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: {
+            parts: [filePart, { text: prompt }],
+          },
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: responseSchema,
+            tools: tools,
+          },
+        });
 
-    if (!response.text) {
-        throw new Error("Gemini returned empty response");
+        if (response.text) {
+           console.log(`[Gemini Service] Success with ${modelName}`);
+           return JSON.parse(response.text);
+        } else {
+           // If response is empty, consider it a failure for this model and try next
+           throw new Error("Empty response text");
+        }
+
+      } catch (error) {
+        console.warn(`[Gemini Service] Failed with ${modelName}:`, error);
+        lastError = error;
+        // Continue loop to try next model
+        continue;
+      }
     }
 
-    return JSON.parse(response.text);
+    // If loop finishes without returning, all models failed
+    throw lastError || new Error("All AI models failed to process the document.");
+
   } catch (error) {
-    console.error("Gemini extraction error:", error);
+    console.error("Gemini processing fatal error:", error);
     throw error;
   }
 };
