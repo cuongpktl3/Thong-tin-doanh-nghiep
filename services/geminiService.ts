@@ -1,13 +1,28 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DocType } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Sử dụng optional chaining (?.) để truy cập an toàn.
+// Nếu import.meta.env bị undefined (do lỗi build hoặc môi trường), ứng dụng sẽ không bị crash.
+const apiKey = import.meta.env?.VITE_API_KEY;
+
+if (!apiKey) {
+  console.error("CRITICAL ERROR: VITE_API_KEY is missing. Please check Vercel Environment Variables.");
+}
+
+// Khởi tạo AI client. Nếu thiếu key, dùng string dummy để tránh lỗi khởi tạo, 
+// nhưng các gọi hàm sau đó sẽ thất bại và được catch ở dưới.
+const ai = new GoogleGenAI({ apiKey: apiKey || "MISSING_KEY" });
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Data = reader.result as string;
+      // Ensure we have data
+      if (!base64Data) {
+        reject(new Error("File reading failed: result is empty"));
+        return;
+      }
       const base64Content = base64Data.split(',')[1];
       resolve({
         inlineData: {
@@ -16,12 +31,19 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType:
         },
       });
     };
-    reader.onerror = reject;
+    reader.onerror = (error) => {
+        console.error("FileReader Error:", error);
+        reject(error);
+    };
     reader.readAsDataURL(file);
   });
 };
 
 export const processDocument = async (file: File, docType: DocType): Promise<any> => {
+  if (!apiKey) {
+    throw new Error("VITE_API_KEY chưa được cấu hình. Vui lòng kiểm tra Settings trên Vercel và Redeploy.");
+  }
+
   try {
     const filePart = await fileToPart(file);
     let prompt = "";
@@ -98,7 +120,11 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
       },
     });
 
-    return JSON.parse(response.text || "{}");
+    if (!response.text) {
+        throw new Error("Gemini returned empty response");
+    }
+
+    return JSON.parse(response.text);
   } catch (error) {
     console.error("Gemini extraction error:", error);
     throw error;

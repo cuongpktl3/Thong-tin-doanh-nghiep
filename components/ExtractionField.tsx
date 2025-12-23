@@ -31,10 +31,15 @@ const ExtractionField: React.FC<ExtractionFieldProps> = ({
       try {
         const data = await processDocument(file, docType);
         onExtract(data);
-      } catch (err) {
-        setError("Không thể đọc tài liệu. Vui lòng thử lại.");
+      } catch (err: any) {
+        console.error("Extraction UI Error:", err);
+        // Display the actual error message if available, otherwise generic
+        const msg = err?.message || "Không thể đọc tài liệu. Vui lòng thử lại.";
+        setError(msg);
       } finally {
         setLoading(false);
+        // Reset input value to allow re-selecting the same file if needed
+        e.target.value = '';
       }
     }
   };
