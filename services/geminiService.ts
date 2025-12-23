@@ -5,6 +5,19 @@ import { DocType } from "../types";
 // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// CẤU HÌNH MODEL:
+// - Development (AI Studio/Local): dùng 'gemini-3-flash-preview' để test tính năng mới nhất.
+// - Production (Vercel): dùng 'gemini-2.0-flash' (hoặc 'gemini-1.5-pro' tùy nhu cầu) để ổn định hơn.
+// import.meta.env.PROD trả về true khi app đã được build (lên Vercel).
+// Safely access import.meta.env to prevent runtime errors if undefined
+const isProd = import.meta.env && import.meta.env.PROD;
+
+const MODEL_NAME = isProd
+  ? 'gemini-2.0-flash' 
+  : 'gemini-3-flash-preview';
+
+console.log(`[Gemini Service] Running in ${isProd ? 'PRODUCTION' : 'DEVELOPMENT'} mode. Using model: ${MODEL_NAME}`);
+
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -101,7 +114,7 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: MODEL_NAME,
       contents: {
         parts: [filePart, { text: prompt }],
       },
