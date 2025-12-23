@@ -23,6 +23,22 @@ const ExtractionField: React.FC<ExtractionFieldProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const cleanErrorMessage = (err: any): string => {
+    const msg = err?.message || JSON.stringify(err);
+    
+    if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
+      return "Hệ thống đang quá tải (Hết lượt miễn phí). Vui lòng đợi 30 giây rồi thử lại.";
+    }
+    if (msg.includes("503") || msg.includes("500") || msg.includes("overloaded")) {
+      return "Máy chủ Google AI đang bận. Đang thử lại...";
+    }
+    if (msg.includes("API_KEY")) {
+      return "Lỗi cấu hình API Key. Vui lòng kiểm tra cài đặt.";
+    }
+    
+    return "Không thể trích xuất dữ liệu. Vui lòng thử lại hoặc nhập tay.";
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -33,9 +49,7 @@ const ExtractionField: React.FC<ExtractionFieldProps> = ({
         onExtract(data);
       } catch (err: any) {
         console.error("Extraction UI Error:", err);
-        // Display the actual error message if available, otherwise generic
-        const msg = err?.message || "Không thể đọc tài liệu. Vui lòng thử lại.";
-        setError(msg);
+        setError(cleanErrorMessage(err));
       } finally {
         setLoading(false);
         // Reset input value to allow re-selecting the same file if needed
@@ -64,7 +78,7 @@ const ExtractionField: React.FC<ExtractionFieldProps> = ({
         {loading && <Loader2 className="animate-spin text-blue-500" size={24} />}
       </div>
 
-      {error && <p className="text-red-500 text-sm mt-1 flex items-center gap-1"><AlertCircle size={14}/> {error}</p>}
+      {error && <p className="text-red-500 text-sm mt-2 flex items-center gap-1 font-medium bg-red-50 p-2 rounded border border-red-200"><AlertCircle size={16} className="shrink-0"/> {error}</p>}
 
       {resultValue && (
         <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md flex items-start gap-2">

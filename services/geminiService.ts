@@ -7,11 +7,11 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // CẤU HÌNH DANH SÁCH MODEL DỰ PHÒNG (FALLBACK)
 // Thứ tự ưu tiên từ cao xuống thấp theo yêu cầu:
-// 1. Gemini 3 Pro Preview
+// 1. Gemini 3 Pro Preview (Giới hạn quota rất thấp)
 // 2. Gemini 3 Flash Preview
-// 3. Gemini 2.5 Pro Preview (Sử dụng 2.0 Pro Exp làm tương đương hiện tại)
-// 4. Gemini 2.5 Flash (Sử dụng 2.0 Flash làm tương đương hiện tại)
-// 5. Gemini 2.5 Flash Lite (Sử dụng 2.0 Flash Lite làm tương đương hiện tại)
+// 3. Gemini 2.5 Pro Preview (Sử dụng 2.0 Pro Exp)
+// 4. Gemini 2.5 Flash (Sử dụng 2.0 Flash)
+// 5. Gemini 2.5 Flash Lite (Sử dụng 2.0 Flash Lite)
 const MODEL_PRIORITY = [
   'gemini-3-pro-preview',
   'gemini-3-flash-preview',
@@ -142,15 +142,21 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
            throw new Error("Empty response text");
         }
 
-      } catch (error) {
-        console.warn(`[Gemini Service] Failed with ${modelName}:`, error);
+      } catch (error: any) {
+        console.warn(`[Gemini Service] Failed with ${modelName}:`, error.message);
         lastError = error;
-        // Continue loop to try next model
+        
+        // Add a small delay (1 second) before trying the next model.
+        // This is CRITICAL for 429 errors. If we hit the rate limit, 
+        // hammering the API instantly with the next request will just trigger another 429 globally.
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         continue;
       }
     }
 
     // If loop finishes without returning, all models failed
+    console.error("All models exhausted.");
     throw lastError || new Error("All AI models failed to process the document.");
 
   } catch (error) {
