@@ -5,19 +5,12 @@ import { DocType } from "../types";
 // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// CẤU HÌNH DANH SÁCH MODEL DỰ PHÒNG (FALLBACK)
-// Thứ tự ưu tiên từ cao xuống thấp theo yêu cầu:
-// 1. Gemini 3 Pro Preview (Giới hạn quota rất thấp - Thường xuyên 429)
-// 2. Gemini 3 Flash Preview
-// 3. Gemini 2.5 Pro Preview (Sử dụng 2.0 Pro Exp)
-// 4. Gemini 2.5 Flash (Sử dụng 2.0 Flash - Ổn định nhất cho Free Tier)
-// 5. Gemini 2.5 Flash Lite (Sử dụng 2.0 Flash Lite)
+// CẤU HÌNH DANH SÁCH MODEL (CHỈ DÙNG 2.0 FLASH)
+// Gemini 2.0 Flash là bản ổn định, tốc độ nhanh và giới hạn Free Tier cao nhất (15 RPM)
+// Loại bỏ hoàn toàn Gemini 3 Pro/Flash Preview để tránh lỗi 429 Resource Exhausted.
 const MODEL_PRIORITY = [
-  'gemini-3-pro-preview',
-  'gemini-3-flash-preview',
-  'gemini-2.0-pro-exp-02-05', 
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite-preview-02-05'
+  'gemini-2.0-flash', 
+  'gemini-2.0-flash-lite-preview-02-05' // Backup siêu nhẹ
 ];
 
 const fileToPart = (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
@@ -68,6 +61,7 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
                      - Copy the content exactly, including the "Chi tiết:" (Detail) part if it exists (e.g., "Bán buôn... Chi tiết: ...").
                   5. Return the Company Name, Tax ID, and this full Business Line string.`;
         
+        // Gemini 2.0 Flash supports search grounding usually, but if it fails, it falls back to text extraction.
         tools = [{ googleSearch: {} }];
 
         responseSchema = {
@@ -146,10 +140,9 @@ export const processDocument = async (file: File, docType: DocType): Promise<any
         console.warn(`[Gemini Service] Failed with ${modelName}:`, error.message);
         lastError = error;
         
-        // TĂNG DELAY LÊN 4000ms (4 giây)
-        // Khi gặp lỗi 429 (Resource Exhausted), nếu retry quá nhanh sẽ tiếp tục bị chặn.
-        // Thời gian chờ 4s giúp API Key "nguội" bớt trước khi thử model tiếp theo (thường là Gemini 2.0 Flash ổn định hơn).
-        await new Promise(resolve => setTimeout(resolve, 4000));
+        // Với Gemini 2.0 Flash, lỗi thường ít gặp hơn.
+        // Giảm thời gian chờ xuống 1s để UX nhanh hơn.
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         continue;
       }
